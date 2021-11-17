@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fluenthose.fullname" . }}
+  labels:
+    {{- include "fluenthose.labels" . | nindent 4 }}
+data:
+    fluentbit.conf: |
+        {{- include "fluenthose.fluentbit.conf" . | nindent 8 }}

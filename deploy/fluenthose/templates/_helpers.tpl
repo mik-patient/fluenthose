@@ -60,3 +60,27 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/* 
+fluentbit config file
+*/}}
+{{- define "fluenthose.fluentbit.conf" -}}
+[SERVICE]
+    HTTP_Server  On
+    HTTP_Listen  0.0.0.0
+    HTTP_PORT    2020
+    Health_Check On 
+    HC_Errors_Count 5 
+    HC_Retry_Failure_Count 5 
+    HC_Period 5
+
+[INPUT]
+    Name              forward
+    Listen            127.0.0.1
+    Port              24224
+    Buffer_Chunk_Size 1M
+    Buffer_Max_Size   6M
+[OUTPUT]
+    Name   stdout
+    Match  *
+{{- end }}

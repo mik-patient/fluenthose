@@ -11,9 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	fluentclient "github.com/IBM/fluent-forward-go/fluent/client"
+	"github.com/heptiolabs/healthcheck"
+
 	"github.com/IBM/fluent-forward-go/fluent/protocol"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	fluentclient "github.com/IBM/fluent-forward-go/fluent/client"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -90,8 +94,22 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 
 	log.Infof("Fluenthose server listening on %s", address)
 	log.Infof("log-level: %s, fowarding to: %s", log.GetLevel(), forwardAddress)
+
+	health := healthcheck.NewHandler()
+
+	health.AddLivenessCheck(
+		"forwarder",
+		healthcheck.TCPDialCheck(forwardAddress, 50*time.Millisecond))
+	health.AddReadinessCheck(
+		"forwarder",
+		healthcheck.TCPDialCheck(forwardAddress, 50*time.Millisecond))
+
 	router := mux.NewRouter()
 	router.HandleFunc("/", firehoseHandler)
+	router.Handle("/metrics", promhttp.Handler())
+	router.HandleFunc("/health/live", health.LiveEndpoint)
+	router.HandleFunc("/health/ready", health.ReadyEndpoint)
+
 	srv := &http.Server{
 		Addr:    address,
 		Handler: router,

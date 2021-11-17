@@ -28,25 +28,51 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: fluenthose
+          args:
+            {{- range $i, $arg := .Values.fluenthose.args }}
+            - "{{ $arg }}"
+            {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.fluenthose.image.repository }}:{{ .Values.fluenthose.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.fluenthose.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: /health/live
               port: http
           readinessProbe:
             httpGet:
-              path: /
+              path: /health/ready
               port: http
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.fluenthose.resources | nindent 12 }}
+        - name: fluentbit
+          args:
+            - --config
+            - /etc/fluentbit/fluentbit.conf
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.fluentbit.image.repository }}:{{ .Values.fluentbit.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.fluentbit.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 2020
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+          resources:
+            {{- toYaml .Values.fluentbit.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
