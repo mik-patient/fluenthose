@@ -33,6 +33,20 @@ spec:
             {{- range $i, $arg := .Values.fluenthose.args }}
             - "{{ $arg }}"
             {{- end }}
+          env:
+            - name: FLUENTHOSE_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: FLUENTHOSE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fluenthose.fullname" . }}
+                  key: accessKey
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.fluenthose.image.repository }}:{{ .Values.fluenthose.image.tag | default .Chart.AppVersion }}"
@@ -52,27 +66,35 @@ spec:
           resources:
             {{- toYaml .Values.fluenthose.resources | nindent 12 }}
         - name: fluentbit
-          args:
-            - --config
-            - /etc/fluentbit/fluentbit.conf
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.fluentbit.image.repository }}:{{ .Values.fluentbit.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.fluentbit.image.pullPolicy }}
           ports:
-            - name: http
+            - name: api
               containerPort: 2020
               protocol: TCP
           livenessProbe:
             httpGet:
               path: /api/v1/health
-              port: http
+              port: api
           readinessProbe:
             httpGet:
               path: /api/v1/health
-              port: http
+              port: api
           resources:
             {{- toYaml .Values.fluentbit.resources | nindent 12 }}
+          volumeMounts:
+            - name: fluentbit-config
+              mountPath: /fluent-bit/etc
+              readOnly: true
+      volumes:
+        - name: fluentbit-config
+          configMap:
+            name: {{ include "fluenthose.fullname" . }}
+            items:
+              - key: fluent-bit.conf
+                path: fluent-bit.conf
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
