@@ -1,8 +1,10 @@
 package firehose
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +18,7 @@ import (
 	"github.com/IBM/fluent-forward-go/fluent/protocol"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	muxlogrus "github.com/pytimer/mux-logrus"
 
 	fluentclient "github.com/IBM/fluent-forward-go/fluent/client"
 	log "github.com/sirupsen/logrus"
@@ -103,8 +106,13 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 	health.AddReadinessCheck(
 		"forwarder",
 		healthcheck.TCPDialCheck(forwardAddress, 50*time.Millisecond))
+	logOptions := muxlogrus.LogOptions{
+		Formatter: &log.JSONFormatter{},
+	}
+	loggingMiddleware := muxlogrus.NewLogger(logOptions)
 
 	router := mux.NewRouter()
+	router.Use(loggingMiddleware.Middleware)
 	router.HandleFunc("/", firehoseHandler)
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/health/live", health.LiveEndpoint)
@@ -141,6 +149,8 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 
 func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 	log.Infof("firehose request received from %s", r.RemoteAddr)
+	log.Debugf("request headers: %+v", r.Header)
+
 	if r.Method != http.MethodPost {
 		JSONHandleError(w, errBadReq)
 		return
@@ -188,10 +198,18 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 
 func parseRequestBody(r *http.Request) (*firehoseRequestBody, error) {
 	body := firehoseRequestBody{}
+	logBody, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Errorf("failed to read request body: %s", err)
+	}
+	log.Debugf("request body: %s", string(logBody))
+	r.Body = ioutil.NopCloser(bytes.NewBuffer(logBody))
 	if r.Body == nil {
+		log.Errorf("request body is empty")
 		return nil, errBadReq
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		log.Errorf("failed to decode request body: %s", err)
 		return nil, errBadReq
 	}
 	return &body, nil
