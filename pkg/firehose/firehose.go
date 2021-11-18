@@ -17,6 +17,7 @@ import (
 
 	"github.com/IBM/fluent-forward-go/fluent/protocol"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	muxlogrus "github.com/pytimer/mux-logrus"
 
@@ -30,6 +31,24 @@ const (
 	eventTypeHeaderName        = "X-Event-Type"
 	commonAttributesHeaderName = "X-Amz-Firehose-Common-Attributes"
 )
+
+var (
+	errAuth       = &firehoseAPIError{code: http.StatusUnauthorized, msg: "unauthorized"}
+	errBadReq     = &firehoseAPIError{code: http.StatusBadRequest, msg: "bad request"}
+	forwardClient *fluentclient.Client
+	accessKey     string
+	eventsTotal   = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "fluenthose_events_total",
+			Help: "Number of events processed by type",
+		},
+		[]string{"type", "status"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(eventsTotal)
+}
 
 type APIError interface {
 	APIError() (int, string, string)
@@ -48,13 +67,6 @@ func (e firehoseAPIError) Error() string {
 func (e firehoseAPIError) APIError() (int, string, string) {
 	return e.code, e.msg, e.requestID
 }
-
-var (
-	errAuth       = &firehoseAPIError{code: http.StatusUnauthorized, msg: "unauthorized"}
-	errBadReq     = &firehoseAPIError{code: http.StatusBadRequest, msg: "bad request"}
-	forwardClient *fluentclient.Client
-	accessKey     string
-)
 
 // firehoseCommonAttributes represents common attributes (metadata).
 type firehoseCommonAttributes struct {
@@ -212,7 +224,10 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		err := forwardClient.SendMessage(msg)
 		if err != nil {
+			eventsTotal.WithLabelValues("eventType", "error").Inc()
 			log.Errorf("failed to send message: %s", err)
+		} else {
+			eventsTotal.WithLabelValues("eventType", "success").Inc()
 		}
 		recordCount++
 	}
