@@ -11,10 +11,12 @@ config:
   logLevel: info
   loki:
     address: loki.tld
+    tls: on
+    port: 443
     auth:
       user: loki
       password: loki
-      tennant: fake
+      # tennant: fake
 
 service:
   type: LoadBalancer
@@ -53,7 +55,7 @@ fluenthose:
   args:
     - "serve"
     - "--log-level" 
-    - "debug"
+    - "info"
   image:
     repository: quay.io/betsson-oss/fluenthose
     pullPolicy: IfNotPresent

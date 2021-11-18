@@ -7,3 +7,5 @@ metadata:
 data:
     fluent-bit.conf: |
         {{- include "fluenthose.fluentbit.conf" . | nindent 8 }}
+    parsers.conf: |
+        {{- include "fluenthose.parsers.conf" . | nindent 8 }}

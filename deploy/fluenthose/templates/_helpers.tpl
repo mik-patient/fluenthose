@@ -73,6 +73,7 @@ fluentbit config file
     HC_Errors_Count 5 
     HC_Retry_Failure_Count 5 
     HC_Period 5
+    Parsers_File /fluent-bit/etc/parsers.conf
 
 [INPUT]
     Name              forward
@@ -80,7 +81,35 @@ fluentbit config file
     Port              24224
     Buffer_Chunk_Size 1M
     Buffer_Max_Size   6M
+
+[FILTER]
+    Name parser
+    Match cloudfront
+    Key_Name data
+    Parser cloudfront
+    Reserve_Data On
+
 [OUTPUT]
     Name   stdout
     Match  *
+
+[OUTPUT]
+    name   loki
+    match  *
+    labels job=fluenthose, $type
+    host {{ .Values.config.loki.address }}
+    port {{ .Values.config.loki.port }}
+    tls {{ .Values.config.loki.tls }}
+    http_user {{ .Values.config.loki.auth.user }}
+    http_passwd {{ .Values.config.loki.auth.password }}
+{{- end }}
+
+{{/* 
+fluentbit parsers file
+*/}}
+{{- define "fluenthose.parsers.conf" -}}
+[PARSER]
+    Name cloudfront
+    Format regex
+    Regex ^(?<timestamp>[^\s]+)[\s]+(?<cIp>[^\s]+)[\s]+(?<timeToFirstByte>[^\s]+)[\s]+(?<scStatus>[^\s]+)[\s]+(?<scBytes>[^\s]+)[\s]+(?<csMethod>[^\s]+)[\s]+(?<csProtocol>[^\s]+)[\s]+(?<csHost>[^\s]+)[\s]+(?<csUriStem>[^\s]+)[\s]+(?<csBytes>[^\s]+)[\s]+(?<xEdgeLocation>[^\s]+)[\s]+(?<xEdgeRequestId>[^\s]+)[\s]+(?<xHostHeader>[^\s]+)[\s]+(?<timeTaken>[^\s]+)[\s]+(?<csProtocolVersion>[^\s]+)[\s]+(?<cIpVersion>[^\s]+)[\s]+(?<csUserAgent>[^\s]+)[\s]+(?<csReferer>[^\s]+)[\s]+(?<csCookie>[^\s]+)[\s]+(?<csUriQuery>[^\s]+)[\s]+(?<xEdgeResponseResultType>[^\s]+)[\s]+(?<xForwardedFor>[^\s]+)[\s]+(?<sslProtocol>[^\s]+)[\s]+(?<sslCipher>[^\s]+)[\s]+(?<xEdgeResultType>[^\s]+)[\s]+(?<fleEncryptedFields>[^\s]+)[\s]+(?<fleStatus>[^\s]+)[\s]+(?<scContentType>[^\s]+)[\s]+(?<scContentLen>[^\s]+)[\s]+(?<scRangeStart>[^\s]+)[\s]+(?<scRangeEnd>[^\s]+)[\s]+(?<cPort>[^\s]+)[\s]+(?<xEdgeDetailedResultType>[^\s]+)[\s]+(?<cCountry>[^\s]+)[\s]+(?<csAcceptEncoding>[^\s]+)[\s]+(?<csAccept>[^\s]+)[\s]+(?<cacheBehaviorPathPattern>[^\s]+)[\s]+(?<csHeaders>[^\s]+)[\s]+(?<csHeaderNames>[^\s]+)[\s]+(?<csHeadersCount>[^\s]+)$
 {{- end }}

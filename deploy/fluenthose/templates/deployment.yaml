@@ -95,6 +95,8 @@ spec:
             items:
               - key: fluent-bit.conf
                 path: fluent-bit.conf
+              - key: parsers.conf
+                path: parsers.conf
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
