@@ -198,8 +198,8 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 		JSONHandleError(w, errBadReq)
 		return
 	}
-
-	for _, record := range firehoseReq.Records {
+	var recordCount = 0
+	for recordCount, record := range firehoseReq.Records {
 		log.Debugf("firehose record: %s", string(record.Data))
 		msg := &protocol.Message{
 			Tag:       eventType,
@@ -214,7 +214,9 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Errorf("failed to send message: %s", err)
 		}
+		recordCount++
 	}
+	log.Infof("%d records sent to fluent forwarder", recordCount)
 
 	resp.Timestamp = time.Now().UnixNano() / int64(time.Millisecond)
 	w.Header().Set("Content-Type", "application/json")

@@ -73,14 +73,15 @@ fluentbit config file
     HC_Errors_Count 5 
     HC_Retry_Failure_Count 5 
     HC_Period 5
+    Flush 1
     Parsers_File /fluent-bit/etc/parsers.conf
 
 [INPUT]
     Name              forward
     Listen            127.0.0.1
     Port              24224
-    Buffer_Chunk_Size 1M
-    Buffer_Max_Size   6M
+    Buffer_Chunk_Size 512K
+    Buffer_Max_Size   512K
 
 [FILTER]
     Name parser
@@ -89,9 +90,9 @@ fluentbit config file
     Parser cloudfront
     Reserve_Data On
 
-[OUTPUT]
-    Name   stdout
-    Match  *
+# [OUTPUT]
+#     Name   stdout
+#     Match  *
 
 [OUTPUT]
     name   loki
@@ -112,4 +113,6 @@ fluentbit parsers file
     Name cloudfront
     Format regex
     Regex ^(?<timestamp>[^\s]+)[\s]+(?<cIp>[^\s]+)[\s]+(?<timeToFirstByte>[^\s]+)[\s]+(?<scStatus>[^\s]+)[\s]+(?<scBytes>[^\s]+)[\s]+(?<csMethod>[^\s]+)[\s]+(?<csProtocol>[^\s]+)[\s]+(?<csHost>[^\s]+)[\s]+(?<csUriStem>[^\s]+)[\s]+(?<csBytes>[^\s]+)[\s]+(?<xEdgeLocation>[^\s]+)[\s]+(?<xEdgeRequestId>[^\s]+)[\s]+(?<xHostHeader>[^\s]+)[\s]+(?<timeTaken>[^\s]+)[\s]+(?<csProtocolVersion>[^\s]+)[\s]+(?<cIpVersion>[^\s]+)[\s]+(?<csUserAgent>[^\s]+)[\s]+(?<csReferer>[^\s]+)[\s]+(?<csCookie>[^\s]+)[\s]+(?<csUriQuery>[^\s]+)[\s]+(?<xEdgeResponseResultType>[^\s]+)[\s]+(?<xForwardedFor>[^\s]+)[\s]+(?<sslProtocol>[^\s]+)[\s]+(?<sslCipher>[^\s]+)[\s]+(?<xEdgeResultType>[^\s]+)[\s]+(?<fleEncryptedFields>[^\s]+)[\s]+(?<fleStatus>[^\s]+)[\s]+(?<scContentType>[^\s]+)[\s]+(?<scContentLen>[^\s]+)[\s]+(?<scRangeStart>[^\s]+)[\s]+(?<scRangeEnd>[^\s]+)[\s]+(?<cPort>[^\s]+)[\s]+(?<xEdgeDetailedResultType>[^\s]+)[\s]+(?<cCountry>[^\s]+)[\s]+(?<csAcceptEncoding>[^\s]+)[\s]+(?<csAccept>[^\s]+)[\s]+(?<cacheBehaviorPathPattern>[^\s]+)[\s]+(?<csHeaders>[^\s]+)[\s]+(?<csHeaderNames>[^\s]+)[\s]+(?<csHeadersCount>[^\s]+)$
+    Time_Key timestamp
+    Time_Format %s.%L
 {{- end }}
