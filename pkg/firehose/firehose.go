@@ -211,7 +211,7 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var recordCount = 0
-	for recordCount, record := range firehoseReq.Records {
+	for _, record := range firehoseReq.Records {
 		log.Debugf("firehose record: %s", string(record.Data))
 		msg := &protocol.Message{
 			Tag:       eventType,

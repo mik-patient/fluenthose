@@ -97,6 +97,8 @@ spec:
                 path: fluent-bit.conf
               - key: parsers.conf
                 path: parsers.conf
+              - key: scripts.lua
+                path: scripts.lua 
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
