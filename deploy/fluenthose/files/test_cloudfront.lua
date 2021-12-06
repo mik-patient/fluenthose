@@ -27,7 +27,8 @@ TestCloudfront = {}
         Lu.assertEquals(rec.csMethod, "GET")
         Lu.assertEquals(rec.csCookieParsed["some-market"], "en")
         Lu.assertEquals(rec.csCookieParsed["some-lobby"], "fobar")
-        Lu.assertEquals(rec.csHeaderNamesParsed["if-none-match"], "W/\"26b-NM56YxcY1QHuHPTLEZz4uWLaS9s\"")
+        Lu.assertEquals(rec.csHeadersParsed["if-none-match"], "W/\"26b-NM56YxcY1QHuHPTLEZz4uWLaS9s\"")
+        Lu.assertEquals(rec.csHeadersParsed["cookie"], "xxx")
     end
     function TestCloudfront:testCloudfrontWithNilHeaders()
         local cloudfront = require('cloudfront')
