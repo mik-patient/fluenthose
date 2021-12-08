@@ -65,6 +65,9 @@ Create the name of the service account to use
 fluentbit config file
 */}}
 {{- define "fluenthose.fluentbit.conf" -}}
+{{- if .Values.config.fluentbit_conf -}}
+{{ .Values.config.fluentbit_conf }}
+{{- else -}}
 [SERVICE]
     HTTP_Server  On
     HTTP_Listen  0.0.0.0
@@ -96,20 +99,20 @@ fluentbit config file
     script  /fluent-bit/etc/scripts.lua
     call    parseCloudfrontHeaders
 
-# [OUTPUT]
-#     Name   stdout
-#     Match  *
-
 [OUTPUT]
     name   loki
     match  *
-    labels job=fluenthose, $type
+    labels job=fluenthose, $type, 
+    label_keys $csHost
     host {{ .Values.config.loki.address }}
     port {{ .Values.config.loki.port }}
     tls {{ .Values.config.loki.tls }}
     http_user {{ .Values.config.loki.auth.user }}
     http_passwd {{ .Values.config.loki.auth.password }}
 {{- end }}
+{{- end }}
+
+{{/*
 
 {{/* 
 fluentbit parsers file
@@ -172,7 +175,9 @@ SplitHeaders = function (x)
     local result = {}
     for line, v in x:gmatch("[^\r\n]+") do
         local key, value = line:match("^([^:]+):%s*(.+)$")
-        result[key:lower()] = value
+        if key then
+            result[key:lower()] = value
+        end
     end
     return result
     
@@ -186,9 +191,10 @@ end
 SplitCookies = function (x)
     local result = {}
     for k, v in x:gmatch("([^;%s]+)=([^;%s]+)") do
-        result[k:lower()] = Unescape(v)
+        if (k ~=  nil) then
+            result[k:lower()] = Unescape(v)
+        end
     end
     return result
-    
 end
 {{- end }}    

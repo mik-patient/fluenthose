@@ -16,7 +16,23 @@ config:
     auth:
       user: loki
       password: loki
-      # tennant: fake
+  # fluentbit_conf: |
+  #   [SERVICE]
+  #     HTTP_Server  On
+  #     HTTP_Listen  0.0.0.0
+  #     HTTP_PORT    2020
+  #     Health_Check On 
+  #     HC_Errors_Count 5 
+  #     HC_Retry_Failure_Count 5 
+  #     HC_Period 5
+  #     Flush 1
+  #     Parsers_File /fluent-bit/etc/parsers.conf
+  #   [INPUT]
+  #     Name              forward
+  #     Listen            127.0.0.1
+  #     Port              24224
+  #     Buffer_Chunk_Size 512K
+  #     Buffer_Max_Size   512K
 
 service:
   type: LoadBalancer

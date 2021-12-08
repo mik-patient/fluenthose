@@ -54,7 +54,9 @@ SplitHeaders = function (x)
     local result = {}
     for line, v in x:gmatch("[^\r\n]+") do
         local key, value = line:match("^([^:]+):%s*(.+)$")
-        result[key:lower()] = value
+        if key then
+            result[key:lower()] = value
+        end
     end
     return result
     
@@ -68,10 +70,11 @@ end
 SplitCookies = function (x)
     local result = {}
     for k, v in x:gmatch("([^;%s]+)=([^;%s]+)") do
-        result[k:lower()] = Unescape(v)
+        if (k ~=  nil) then
+            result[k:lower()] = Unescape(v)
+        end
     end
     return result
-    
 end
 
 function Dump(o)
@@ -91,4 +94,5 @@ function Dump(o)
 
 -- export functions
 M.parseCloudfrontHeaders = parseCloudfrontHeaders
+M.SplitHeaders = SplitHeaders
 return M

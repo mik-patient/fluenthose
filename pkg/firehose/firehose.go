@@ -213,6 +213,7 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 	var recordCount = 0
 	for _, record := range firehoseReq.Records {
 		log.Debugf("firehose record: %s", string(record.Data))
+		recordCount++
 		msg := &protocol.Message{
 			Tag:       eventType,
 			Timestamp: time.Now().UTC().Unix(),
@@ -229,7 +230,6 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			eventsTotal.WithLabelValues("eventType", "success").Inc()
 		}
-		recordCount++
 	}
 	log.Infof("%d records sent to fluent forwarder", recordCount)
 

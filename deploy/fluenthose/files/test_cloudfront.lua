@@ -30,6 +30,22 @@ TestCloudfront = {}
         Lu.assertEquals(rec.csHeadersParsed["if-none-match"], "W/\"26b-NM56YxcY1QHuHPTLEZz4uWLaS9s\"")
         Lu.assertEquals(rec.csHeadersParsed["cookie"], "xxx")
     end
+
+    function TestCloudfront:testCloudfrontNoHeaders()
+        local cloudfront = require('cloudfront')
+        local code, ts, rec = cloudfront.parseCloudfrontHeaders(self.tag, self.timestamp, {})
+        Lu.assertEquals(code, 0)
+        Lu.assertEquals(ts, 0)
+        Lu.assertEquals(rec, 0)
+    end
+
+    function TestCloudfront:testCloudfrontErrorHeaders()
+        local cloudfront = require('cloudfront')
+        
+        local result = cloudfront.SplitHeaders("bar:foo\n:bar")
+        Lu.assertEquals(result, 'bar="foo"')
+    end
+
     function TestCloudfront:testCloudfrontWithNilHeaders()
         local cloudfront = require('cloudfront')
         local record = {

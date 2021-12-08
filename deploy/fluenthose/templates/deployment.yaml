@@ -13,8 +13,11 @@ spec:
       {{- include "fluenthose.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        checksum/config: {{ include "fluenthose.fluentbit.conf" . | sha256sum }}
+        checksum/parsers: {{ include "fluenthose.parsers.conf" . | sha256sum }}
+        checksum/scripts: {{ include "fluenthose.scripts.lua" . | sha256sum }}
+      {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
