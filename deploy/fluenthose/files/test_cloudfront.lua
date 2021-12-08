@@ -6,7 +6,7 @@ TestCloudfront = {}
         self.timestamp = 12345
         self.record = {
             ["type"] = "cloudfront",
-            ["csHost"] = "example.com",
+            ["csHost"] = "hostnamez.example.com",
             ["csUriStem"] = "/index.html",
             ["csUriQuery"] = "-",
             ["csMethod"] = "GET",
@@ -21,7 +21,7 @@ TestCloudfront = {}
         local code, ts, rec = cloudfront.parseCloudfrontHeaders(self.tag, self.timestamp, self.record)
         Lu.assertEquals(code, 2)
         Lu.assertEquals(ts, 12345)
-        Lu.assertEquals(rec.csHost, "example.com")
+        Lu.assertEquals(rec.csHost, "hostnamez.example.com")
         Lu.assertEquals(rec.csUriStem, "/index.html")
         Lu.assertEquals(rec.csUriQuery, "-")
         Lu.assertEquals(rec.csMethod, "GET")
@@ -29,6 +29,7 @@ TestCloudfront = {}
         Lu.assertEquals(rec.csCookieParsed["some-lobby"], "fobar")
         Lu.assertEquals(rec.csHeadersParsed["if-none-match"], "W/\"26b-NM56YxcY1QHuHPTLEZz4uWLaS9s\"")
         Lu.assertEquals(rec.csHeadersParsed["cookie"], "xxx")
+        Lu.assertEquals(rec.csHostDomain, "example.com")
     end
 
     function TestCloudfront:testCloudfrontNoHeaders()
@@ -43,7 +44,7 @@ TestCloudfront = {}
         local cloudfront = require('cloudfront')
         
         local result = cloudfront.SplitHeaders("bar:foo\n:bar")
-        Lu.assertEquals(result, 'bar="foo"')
+        Lu.assertEquals(result, {bar="foo"})
     end
 
     function TestCloudfront:testCloudfrontWithNilHeaders()
@@ -69,5 +70,25 @@ TestCloudfront = {}
         }
         local result = cloudfront.parseCloudfrontHeaders(self.tag, self.timestamp, record)
         Lu.assertEquals(result, 0)
-    end 
+    end
+
+    function TestCloudfront:testGetDomain()
+        local cloudfront = require('cloudfront')
+        local hosts = { "a.b.com", "a.b.com.net", "b.com", "a.b.c.b.com.us", "a.b.c.b.com.us.net" }
+        for i, host in ipairs(hosts) do
+            local domain = cloudfront.GetDomain(host)
+            if i == 1 then
+                Lu.assertEquals(domain, "b.com")
+            elseif i == 2 then
+                Lu.assertEquals(domain, "b.com.net")
+            elseif i == 3 then
+                Lu.assertEquals(domain, "b.com")
+            elseif i == 4 then
+                Lu.assertEquals(domain, "b.com.us")
+            elseif i == 5 then
+                Lu.assertEquals(domain, "b.com.us.net")
+            end
+        end
+    end
+
 os.exit( Lu.LuaUnit.run() )
