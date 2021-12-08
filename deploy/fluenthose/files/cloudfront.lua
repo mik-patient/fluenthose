@@ -111,6 +111,9 @@ function GetDomain(host)
 end
 
 function Split(str, pat)
+    if str == nil then
+        return {"unknown domain"}
+    end
     local t = { n = 0 }  -- NOTE: use {n = 0} in Lua-5.0
     local fpat = "(.-)" .. pat
     local last_end = 1
