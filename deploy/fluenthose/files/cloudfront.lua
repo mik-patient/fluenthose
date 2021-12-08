@@ -93,6 +93,9 @@ function Dump(o)
  end
 
 function GetDomain(host)
+    if host == nil or host == "" then
+        return "-"
+    end
     local newHost = ""
     local domain = Split(host,'[\\.]+')
     for i=1, #domain do
@@ -111,8 +114,8 @@ function GetDomain(host)
 end
 
 function Split(str, pat)
-    if str == nil then
-        return {"unknown", "domain"}
+    if str == nil or str == "" then
+        return {"-"}
     end
     local t = { n = 0 }  -- NOTE: use {n = 0} in Lua-5.0
     local fpat = "(.-)" .. pat
