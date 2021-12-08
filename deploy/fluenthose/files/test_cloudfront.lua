@@ -74,9 +74,10 @@ TestCloudfront = {}
 
     function TestCloudfront:testGetDomain()
         local cloudfront = require('cloudfront')
-        local hosts = { "a.b.com", "a.b.com.net", "b.com", "a.b.c.b.com.us", "a.b.c.b.com.us.net" }
+        local hosts = { "a.b.com", "a.b.com.net", "b.com", "a.b.c.b.com.us", "a.b.c.b.com.us.net", "foo" }
         for i, host in ipairs(hosts) do
             local domain = cloudfront.GetDomain(host)
+            print ("\n", host, " --> ", domain)
             if i == 1 then
                 Lu.assertEquals(domain, "b.com")
             elseif i == 2 then
