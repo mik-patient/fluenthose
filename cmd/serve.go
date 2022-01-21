@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/BetssonGroup/fluenthose/pkg/firehose"
@@ -32,13 +31,14 @@ var serveCmd = &cobra.Command{
 		setupLogging()
 		accessKey := os.Getenv("ACCESS_KEY")
 		if accessKey == "" {
-			cobra.CheckErr(fmt.Errorf("ACCESS_KEY environment variable is required"))
+			cobra.CheckErr("ACCESS_KEY environment variable is required")
 		}
 		log.Info("log-level: %s", log.GetLevel())
 		firehose.RunFirehoseServer(
 			cmd.Flag("listen").Value.String(),
 			accessKey,
 			cmd.Flag("forward").Value.String(),
+			cmd.Flag("event-type-header-name").Value.String(),
 		)
 	},
 }
@@ -57,4 +57,6 @@ func init() {
 	// serveCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	serveCmd.Flags().StringP("listen", "l", ":8080", "Listen address")
 	serveCmd.Flags().StringP("forward", "f", "127.0.0.1:24224", "Forward address")
+	// Set event type header name
+	serveCmd.Flags().StringP("event-type-header-name", "e", "X-EVENT-TYPE", "Event type header name")
 }

@@ -2,7 +2,9 @@ package firehose
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"net"
@@ -28,7 +30,6 @@ import (
 const (
 	accessKeyHeaderName        = "X-Amz-Firehose-Access-Key"
 	requestIDHeaderName        = "X-Amz-Firehose-Request-Id"
-	eventTypeHeaderName        = "X-Event-Type"
 	commonAttributesHeaderName = "X-Amz-Firehose-Common-Attributes"
 )
 
@@ -44,6 +45,7 @@ var (
 		},
 		[]string{"type", "status"},
 	)
+	eventTypeHeaderName string
 )
 
 func init() {
@@ -92,7 +94,25 @@ type firehoseResponseBody struct {
 	ErrorMessage string `json:"errorMessage,omitempty"`
 }
 
-func RunFirehoseServer(address, key, forwardAddress string) {
+// cloudwatchlogsevent represents cloudwatchlogs event.
+type cloudWatchLogsEvent struct {
+	Owner               string                        `json:"owner"`
+	LogGroup            string                        `json:"logGroup"`
+	LogStream           string                        `json:"logStream"`
+	SubscriptionFilters []string                      `json:"subscriptionFilters"`
+	MessageType         string                        `json:"messageType"`
+	Timestamp           int64                         `json:"timestamp"`
+	LogEvents           []cloudWatchLogsEventLogEvent `json:"logEvents"`
+}
+
+type cloudWatchLogsEventLogEvent struct {
+	ID        string `json:"id"`
+	Message   string `json:"message"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+func RunFirehoseServer(address, key, forwardAddress, eventTypeHeader string) {
+	eventTypeHeaderName = eventTypeHeader
 	accessKey = key
 	forwardHost, forwardPort, err := net.SplitHostPort(forwardAddress)
 	if err != nil {
@@ -112,11 +132,7 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 		log.Fatalf("error connecting to fluent forwarder: %s", err)
 	}
 
-	log.Infof("Fluenthose server listening on %s", address)
-	log.Debugf("log-level: %s, fowarding to: %s", log.GetLevel(), forwardAddress)
-
 	health := healthcheck.NewHandler()
-
 	health.AddLivenessCheck(
 		"forwarder",
 		healthcheck.TCPDialCheck(forwardAddress, 50*time.Millisecond))
@@ -131,7 +147,7 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 	loggingMiddleware := muxlogrus.NewLogger(logOptions)
 
 	router := mux.NewRouter()
-	router.Handle("/", loggingMiddleware.Middleware(http.HandlerFunc(firehoseHandler)))
+	router.Handle("/", loggingMiddleware.Middleware(http.HandlerFunc(firehoseHandler))).Methods("POST")
 	router.Handle("/metrics", promhttp.Handler())
 	router.HandleFunc("/health/live", health.LiveEndpoint)
 	router.HandleFunc("/health/ready", health.ReadyEndpoint)
@@ -148,9 +164,11 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
-
+	log.Infof("Fluenthose server listening on %s", address)
+	log.Debugf("log-level: %s, fowarding to: %s", log.GetLevel(), forwardAddress)
 	<-done
 
+	// shutdown gracefully
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer func() {
 		forwardClient.Disconnect()
@@ -164,28 +182,139 @@ func RunFirehoseServer(address, key, forwardAddress string) {
 }
 
 func firehoseHandler(w http.ResponseWriter, r *http.Request) {
-	log.Infof("firehose %s request received from %s", r.Method, r.RemoteAddr)
-	log.Debugf("firehose request headers: %+v", r.Header)
-
-	if r.Method != http.MethodPost {
-		JSONHandleError(w, errBadReq)
-		return
-	}
+	log.Debugf("firehose %s request received from %s", r.Method, r.RemoteAddr)
 	key := r.Header.Get(accessKeyHeaderName)
 	if key == "" || key != accessKey {
 		JSONHandleError(w, errAuth)
 		return
 
 	}
+
 	requestID := r.Header.Get(requestIDHeaderName)
 	if requestID == "" {
+		log.Debugf("requestID header is missing")
 		JSONHandleError(w, errBadReq)
 		return
 	}
+
 	resp := firehoseResponseBody{
 		RequestID: requestID,
 	}
 
+	log.Debugf("%s request from %s", r.Method, r.RemoteAddr)
+	log.Debugf("request headers: %+v", r.Header)
+	log.Debugf("body: %s", r.Body)
+
+	eventType := parseEventType(r)
+	firehoseReq, err := parseRequestBody(r)
+	if err != nil {
+		log.Errorf("failed to parse request body: %s", err)
+		JSONHandleError(w, errBadReq)
+		return
+	}
+
+	for _, record := range firehoseReq.Records {
+		switch eventType {
+		case "cloudwatchlogs":
+			if err = forwardCloudwatchLog(record.Data, requestID); err != nil {
+				log.Errorf("failed to forward cloudwatchlogs event: %s", err)
+				continue
+			}
+		case "cloudfront":
+			if err = forwardCloudfrontEvent(record.Data, requestID); err != nil {
+				log.Errorf("failed to forward cloudfront event: %s", err)
+				continue
+			}
+		default: // do nothing
+		}
+	}
+	resp.Timestamp = time.Now().UnixNano() / int64(time.Millisecond)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+func forwardCloudfrontEvent(data []byte, requestID string) error {
+	var recordCount = 0
+	log.Debugf("firehose record: %s", string(data))
+	// decode base64 encoded data
+	decodedData, err := base64.StdEncoding.DecodeString(string(data))
+	if err != nil {
+		log.Errorf("failed to decode base64 encoded data: %s", err)
+		return err
+	}
+	log.Debugf("firehose record decoded: %s", decodedData)
+	recordCount++
+	msg := &protocol.Message{
+		Tag:       "cloudfront",
+		Timestamp: time.Now().UTC().Unix(),
+		Record: map[string]interface{}{
+			"data": string(decodedData),
+			"type": "cloudfront",
+		},
+		Options: &protocol.MessageOptions{},
+	}
+	err = forwardClient.SendMessage(msg)
+	if err != nil {
+		eventsTotal.WithLabelValues("eventType", "error").Inc()
+		log.Errorf("failed to send message: %s", err)
+	} else {
+		eventsTotal.WithLabelValues("eventType", "success").Inc()
+		log.Infof("%d records sent to fluent forwarder", recordCount)
+
+	}
+	return nil
+}
+
+func forwardCloudwatchLog(data []byte, requestID string) error {
+	// base64 decode and gunzip event data
+	decodedData, err := base64.StdEncoding.DecodeString(string(data))
+	if err != nil {
+		return err
+	}
+	unzippedData, err := gzip.NewReader(bytes.NewReader(decodedData))
+	if err != nil {
+		return err
+	}
+	defer unzippedData.Close()
+	var logRecord cloudWatchLogsEvent
+	err = json.NewDecoder(unzippedData).Decode(&logRecord)
+	if err != nil {
+		return err
+	}
+	log.Debugf("cloudwatch log record: %+v", logRecord)
+	var logGroupName = logRecord.LogGroup
+	var logStreamName = logRecord.LogStream
+	var logEvents = logRecord.LogEvents
+	for _, logEvent := range logEvents {
+		msg := &protocol.Message{
+			Tag:       "cloudwatchlogs",
+			Timestamp: logEvent.Timestamp,
+			Record: map[string]interface{}{
+				"owner":         logRecord.Owner,
+				"logGroupName":  logGroupName,
+				"logStreamName": logStreamName,
+				"message":       logEvent.Message,
+				"timestamp":     logEvent.Timestamp,
+				"requestID":     requestID,
+				"type":          "cloudwatchlogs",
+			},
+			Options: &protocol.MessageOptions{},
+		}
+		log.Debugf("cloudwatch log message: %+v", msg)
+		err := forwardClient.SendMessage(msg)
+		if err != nil {
+			eventsTotal.WithLabelValues("eventType", "error").Inc()
+			log.Errorf("failed to send message: %s", err)
+		} else {
+			eventsTotal.WithLabelValues("eventType", "success").Inc()
+			log.Infof("%d records sent to fluent forwarder", 1)
+		}
+	}
+	return nil
+}
+
+func parseEventType(r *http.Request) string {
 	var eventType = "unknown"
 	commonAttributes := firehoseCommonAttributes{}
 	if err := json.Unmarshal([]byte(r.Header.Get(commonAttributesHeaderName)), &commonAttributes); err != nil {
@@ -203,40 +332,7 @@ func firehoseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Debugf("event type is: %s", eventType)
 	}
-
-	firehoseReq, err := parseRequestBody(r)
-	if err != nil {
-		log.Errorf("failed to parse request body: %s", err)
-		JSONHandleError(w, errBadReq)
-		return
-	}
-	var recordCount = 0
-	for _, record := range firehoseReq.Records {
-		log.Debugf("firehose record: %s", string(record.Data))
-		recordCount++
-		msg := &protocol.Message{
-			Tag:       eventType,
-			Timestamp: time.Now().UTC().Unix(),
-			Record: map[string]interface{}{
-				"data": string(record.Data),
-				"type": eventType,
-			},
-			Options: &protocol.MessageOptions{},
-		}
-		err := forwardClient.SendMessage(msg)
-		if err != nil {
-			eventsTotal.WithLabelValues("eventType", "error").Inc()
-			log.Errorf("failed to send message: %s", err)
-		} else {
-			eventsTotal.WithLabelValues("eventType", "success").Inc()
-		}
-	}
-	log.Infof("%d records sent to fluent forwarder", recordCount)
-
-	resp.Timestamp = time.Now().UnixNano() / int64(time.Millisecond)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(resp)
+	return eventType
 }
 
 func parseRequestBody(r *http.Request) (*firehoseRequestBody, error) {
@@ -245,7 +341,6 @@ func parseRequestBody(r *http.Request) (*firehoseRequestBody, error) {
 	if err != nil {
 		log.Errorf("failed to read request body: %s", err)
 	}
-	log.Debugf("request body: %s", string(logBody))
 	r.Body = ioutil.NopCloser(bytes.NewBuffer(logBody))
 	if r.Body == nil {
 		log.Errorf("request body is empty")
